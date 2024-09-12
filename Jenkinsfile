@@ -15,7 +15,7 @@ pipeline {
                 git branch: 'shanawaz', url: 'https://github.com/pshanawazkhan/aws-api-gateway.git'
             }
         }
-        stage('Build and Push Docker Image') {
+      /*  stage('Build and Push Docker Image') {
             steps {
                 script {
                     def mvnHome = tool 'maven'
@@ -30,32 +30,37 @@ pipeline {
                     }
                 }
             }
-        }
+        } */
        
-       stage('Check KUBECONFIG') {
+      
+      stage('Check KUBECONFIG') {
     steps {
         script {
             withCredentials([file(credentialsId: K8S_REGESTRY_CREDENTIALS, variable: 'KUBECONFIG')]) {
-                // PowerShell to decode Base64 content of the kubeconfig
-                powershell '''
-                $kubeconfigContent = Get-Content -Path $env:KUBECONFIG -Raw
-                $caCrtContent = [System.Convert]::FromBase64String($kubeconfigContent | Select-String -Pattern "certificate-authority-data" | ForEach-Object {$_ -replace "certificate-authority-data:", ""})
-                $clientCrtContent = [System.Convert]::FromBase64String($kubeconfigContent | Select-String -Pattern "client-certificate-data" | ForEach-Object {$_ -replace "client-certificate-data:", ""})
-                $clientKeyContent = [System.Convert]::FromBase64String($kubeconfigContent | Select-String -Pattern "client-key-data" | ForEach-Object {$_ -replace "client-key-data:", ""})
+                // Decode Base64 strings inside the kubeconfig using Groovy
+                def kubeconfig = readFile(env.KUBECONFIG)
 
-                # Save the decoded files for debugging or future use
-                [System.IO.File]::WriteAllBytes("C:\\path\\to\\ca.crt", $caCrtContent)
-                [System.IO.File]::WriteAllBytes("C:\\path\\to\\client.crt", $clientCrtContent)
-                [System.IO.File]::WriteAllBytes("C:\\path\\to\\client.key", $clientKeyContent)
+                def caCrtBase64 = kubeconfig.split('certificate-authority-data: ')[1].split('\n')[0]
+                def clientCrtBase64 = kubeconfig.split('client-certificate-data: ')[1].split('\n')[0]
+                def clientKeyBase64 = kubeconfig.split('client-key-data: ')[1].split('\n')[0]
 
-                # Output the decoded content (optional)
-                Write-Host "Decoded ca.crt:"
-                Get-Content "C:\\path\\to\\ca.crt"
-                '''
-                
-                // Check contents for debugging
-                bat 'type %KUBECONFIG%' // Outputs the kubeconfig content
-                bat 'kubectl config view' // Verifies the config used by kubectl
+                def caCrt = Base64.decoder.decode(caCrtBase64)
+                def clientCrt = Base64.decoder.decode(clientCrtBase64)
+                def clientKey = Base64.decoder.decode(clientKeyBase64)
+
+                // Write decoded data to files
+                writeFile file: 'ca.crt', text: new String(caCrt)
+                writeFile file: 'client.crt', text: new String(clientCrt)
+                writeFile file: 'client.key', text: new String(clientKey)
+
+                // Print the contents of decoded files (optional)
+                bat 'type ca.crt'
+                bat 'type client.crt'
+                bat 'type client.key'
+
+                // Check the KUBECONFIG content
+                bat 'type %KUBECONFIG%'
+                bat 'kubectl config view'
             }
         }
     }
