@@ -34,17 +34,19 @@ pipeline {
         } */
        
       
-      stage('Check KUBECONFIG') {
+     stage('Check KUBECONFIG') {
     steps {
         script {
             withCredentials([file(credentialsId: K8S_REGESTRY_CREDENTIALS, variable: 'KUBECONFIG')]) {
-                // Decode Base64 strings inside the kubeconfig using Groovy
+                // Read kubeconfig content
                 def kubeconfig = readFile(env.KUBECONFIG)
 
-                def caCrtBase64 = kubeconfig.split('certificate-authority-data: ')[1].split('\n')[0]
-                def clientCrtBase64 = kubeconfig.split('client-certificate-data: ')[1].split('\n')[0]
-                def clientKeyBase64 = kubeconfig.split('client-key-data: ')[1].split('\n')[0]
+                // Extract and trim Base64-encoded data
+                def caCrtBase64 = kubeconfig.split('certificate-authority-data: ')[1].split('\n')[0].trim()
+                def clientCrtBase64 = kubeconfig.split('client-certificate-data: ')[1].split('\n')[0].trim()
+                def clientKeyBase64 = kubeconfig.split('client-key-data: ')[1].split('\n')[0].trim()
 
+                // Decode Base64 strings
                 def caCrt = Base64.decoder.decode(caCrtBase64)
                 def clientCrt = Base64.decoder.decode(clientCrtBase64)
                 def clientKey = Base64.decoder.decode(clientKeyBase64)
