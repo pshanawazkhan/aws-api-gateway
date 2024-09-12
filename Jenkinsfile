@@ -1,4 +1,5 @@
 import java.util.Base64
+
 pipeline {
     agent any
 
@@ -16,60 +17,42 @@ pipeline {
                 git branch: 'shanawaz', url: 'https://github.com/pshanawazkhan/aws-api-gateway.git'
             }
         }
-      /*  stage('Build and Push Docker Image') {
+
+        stage('Check KUBECONFIG') {
             steps {
                 script {
-                    def mvnHome = tool 'maven'
-                    bat "${mvnHome}\\bin\\mvn clean install"
+                    withCredentials([file(credentialsId: K8S_REGESTRY_CREDENTIALS, variable: 'KUBECONFIG')]) {
+                        // Read kubeconfig content
+                        def kubeconfig = readFile(env.KUBECONFIG)
 
-                    withCredentials([usernamePassword(credentialsId: DOCKER_REGISTRY_CREDENTIALS, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        bat """
-                            docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
-                            docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
-                            docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
-                        """
+                        // Extract and sanitize Base64-encoded data (removing spaces and newlines)
+                        def caCrtBase64 = kubeconfig.split('certificate-authority-data: ')[1].split('\n')[0].trim().replaceAll("\\s", "")
+                        def clientCrtBase64 = kubeconfig.split('client-certificate-data: ')[1].split('\n')[0].trim().replaceAll("\\s", "")
+                        def clientKeyBase64 = kubeconfig.split('client-key-data: ')[1].split('\n')[0].trim().replaceAll("\\s", "")
+
+                        // Decode Base64 strings
+                        def caCrt = Base64.decoder.decode(caCrtBase64)
+                        def clientCrt = Base64.decoder.decode(clientCrtBase64)
+                        def clientKey = Base64.decoder.decode(clientKeyBase64)
+
+                        // Write decoded data to files
+                        writeFile file: 'ca.crt', text: new String(caCrt)
+                        writeFile file: 'client.crt', text: new String(clientCrt)
+                        writeFile file: 'client.key', text: new String(clientKey)
+
+                        // Print the contents of decoded files (optional)
+                        bat 'type ca.crt'
+                        bat 'type client.crt'
+                        bat 'type client.key'
+
+                        // Check the KUBECONFIG content
+                        bat 'type %KUBECONFIG%'
+                        bat 'kubectl config view'
                     }
                 }
             }
-        } */
-       
-      
-     stage('Check KUBECONFIG') {
-    steps {
-        script {
-            withCredentials([file(credentialsId: K8S_REGESTRY_CREDENTIALS, variable: 'KUBECONFIG')]) {
-                // Read kubeconfig content
-                def kubeconfig = readFile(env.KUBECONFIG)
-
-                // Extract and trim Base64-encoded data
-                def caCrtBase64 = kubeconfig.split('certificate-authority-data: ')[1].split('\n')[0].trim()
-                def clientCrtBase64 = kubeconfig.split('client-certificate-data: ')[1].split('\n')[0].trim()
-                def clientKeyBase64 = kubeconfig.split('client-key-data: ')[1].split('\n')[0].trim()
-
-                // Decode Base64 strings
-                def caCrt = Base64.decoder.decode(caCrtBase64)
-                def clientCrt = Base64.decoder.decode(clientCrtBase64)
-                def clientKey = Base64.decoder.decode(clientKeyBase64)
-
-                // Write decoded data to files
-                writeFile file: 'ca.crt', text: new String(caCrt)
-                writeFile file: 'client.crt', text: new String(clientCrt)
-                writeFile file: 'client.key', text: new String(clientKey)
-
-                // Print the contents of decoded files (optional)
-                bat 'type ca.crt'
-                bat 'type client.crt'
-                bat 'type client.key'
-
-                // Check the KUBECONFIG content
-                bat 'type %KUBECONFIG%'
-                bat 'kubectl config view'
-            }
         }
-    }
-}
-       
-       
+
         stage('Deploy to Kubernetes') {
             steps {
                 script {
@@ -81,6 +64,7 @@ pipeline {
                 }
             }
         }
+
         stage("Verify Deployment") {
             steps {
                 script {
