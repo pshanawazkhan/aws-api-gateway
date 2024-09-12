@@ -3,8 +3,8 @@ pipeline {
 
     environment {
         MAVEN_OPTS = '-Xms256m -Xmx512m'
-        DOCKER_REGISTRY_CREDENTIALS = 'dockerhub_credentials'   //DOCKER CREDENTIALS
-		K8S_REGESTRY_CREDENTIALS ='kubeconfig_credentials'      //K8S Credentials
+        DOCKER_REGISTRY_CREDENTIALS = 'dockerhub_credentials'
+        K8S_REGESTRY_CREDENTIALS ='kubeconfig_credentials'
         DOCKER_IMAGE = 'phanawazkhan/apigateway'
         DOCKER_TAG = '6.6'
     }
@@ -27,6 +27,16 @@ pipeline {
                             docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
                             docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
                         """
+                    }
+                }
+            }
+        }
+        stage('Check KUBECONFIG') {
+            steps {
+                script {
+                    withCredentials([file(credentialsId: K8S_REGESTRY_CREDENTIALS, variable: 'KUBECONFIG')]) {
+                        bat 'type %KUBECONFIG%' // Outputs the contents of the kubeconfig for debugging
+                        bat 'kubectl config view' // Verifies the config used by kubectl
                     }
                 }
             }
