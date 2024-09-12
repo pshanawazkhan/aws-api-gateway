@@ -1,16 +1,12 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'maven' // Name defined in the Global Tool Configuration
-        jdk 'jdk17'   // JDK tool
-    }
-
     environment {
         MAVEN_OPTS = '-Xms256m -Xmx512m'
+        DOCKER_REGISTRY_CREDENTIALS = 'dockerhub_credentials'    // Jenkins Credentials ID for DockerHub
         DOCKER_IMAGE = 'phanawazkhan/apigateway'               // Docker image name
-        DOCKER_TAG = '4.6'                                     // Tag for the Docker image
-        DOCKER_CREDENTIALS_ID = 'docker_id'    // Credentials ID which we configure ->Id:- docker_i
+        DOCKER_TAG = '6.6'                                     // Tag for the Docker image
+      //  KUBECONFIG_CREDENTIALS = 'kubeconfig_credentials'      // Jenkins Credentials ID for kubeconfig
     }
 
     stages {
@@ -19,53 +15,60 @@ pipeline {
                 git branch: 'shanawaz', url: 'https://github.com/pshanawazkhan/aws-api-gateway.git'
             }
         }
-
-        stage('Build') {
+        stage('Build and Push Docker Image') {
             steps {
                 script {
                     def mvnHome = tool 'maven'
-                    // Build the project using Maven
                     bat "${mvnHome}\\bin\\mvn clean install"
-                }
-            }
-        }
 
-        stage('Docker Build') {
-            steps {
-                script {
-                    // Build Docker image
-                    bat "docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} ."
-                }
-            }
-        }
-
-        stage('Docker Login') {
-            steps {
-                script {
-                    // Use Jenkins credentials to log in to DockerHub
-                  withCredentials([usernamePassword(credentialsId: "${DOCKER_CREDENTIALS_ID}", usernameVariable: 'user', passwordVariable: 'password')]) {
-                        bat "docker login -u ${user} -p ${password}"
+                    // Build and push the Docker image
+                    withCredentials([usernamePassword(credentialsId: 'dockerhub_credentials', usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
+                        bat """
+                            docker build -t ${DOCKER_IMAGE}:${DOCKER_TAG} .
+                            docker login -u ${DOCKER_USER} -p ${DOCKER_PASS}
+                            docker push ${DOCKER_IMAGE}:${DOCKER_TAG}
+                        """
                     }
                 }
             }
         }
-
-        stage('Docker Push') {
+        stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    // Push the Docker image to DockerHub
-                    bat "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
+                    withCredentials([file(credentialsId: 'kubeconfig_credentials', variable: 'KUBECONFIG')]) {
+                        // Use kubectl to apply Kubernetes resources
+                        bat 'kubectl apply -f namespace.yaml'
+						bat 'kubectl apply -f deployment.yaml'
+						bat 'kubectl apply -f service.yaml'
+                    }
                 }
             }
         }
+		
+		  stage("Verify deployment") {
+		  
+		    steps{
+			   script{
+			   
+			    bat 'kubectl get pods -n application'
+			   
+			   }
+			
+			}
+		  
+		  
+		  }
+		
+		
+		
     }
 
     post {
         success {
-            echo 'Docker image build and push succeeded!'
+            echo 'Build and deployment succeeded!'
         }
         failure {
-            echo 'Build failed. Docker image not pushed.'
+            echo 'Build or deployment failed!'
         }
     }
 }
