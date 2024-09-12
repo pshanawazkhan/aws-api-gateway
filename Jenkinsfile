@@ -31,16 +31,37 @@ pipeline {
                 }
             }
         }
-        stage('Check KUBECONFIG') {
-            steps {
-                script {
-                    withCredentials([file(credentialsId: K8S_REGESTRY_CREDENTIALS, variable: 'KUBECONFIG')]) {
-                        bat 'type %KUBECONFIG%' // Outputs the contents of the kubeconfig for debugging
-                        bat 'kubectl config view' // Verifies the config used by kubectl
-                    }
-                }
+       
+       stage('Check KUBECONFIG') {
+    steps {
+        script {
+            withCredentials([file(credentialsId: K8S_REGESTRY_CREDENTIALS, variable: 'KUBECONFIG')]) {
+                // PowerShell to decode Base64 content of the kubeconfig
+                powershell '''
+                $kubeconfigContent = Get-Content -Path $env:KUBECONFIG -Raw
+                $caCrtContent = [System.Convert]::FromBase64String($kubeconfigContent | Select-String -Pattern "certificate-authority-data" | ForEach-Object {$_ -replace "certificate-authority-data:", ""})
+                $clientCrtContent = [System.Convert]::FromBase64String($kubeconfigContent | Select-String -Pattern "client-certificate-data" | ForEach-Object {$_ -replace "client-certificate-data:", ""})
+                $clientKeyContent = [System.Convert]::FromBase64String($kubeconfigContent | Select-String -Pattern "client-key-data" | ForEach-Object {$_ -replace "client-key-data:", ""})
+
+                # Save the decoded files for debugging or future use
+                [System.IO.File]::WriteAllBytes("C:\\path\\to\\ca.crt", $caCrtContent)
+                [System.IO.File]::WriteAllBytes("C:\\path\\to\\client.crt", $clientCrtContent)
+                [System.IO.File]::WriteAllBytes("C:\\path\\to\\client.key", $clientKeyContent)
+
+                # Output the decoded content (optional)
+                Write-Host "Decoded ca.crt:"
+                Get-Content "C:\\path\\to\\ca.crt"
+                '''
+                
+                // Check contents for debugging
+                bat 'type %KUBECONFIG%' // Outputs the kubeconfig content
+                bat 'kubectl config view' // Verifies the config used by kubectl
             }
         }
+    }
+}
+       
+       
         stage('Deploy to Kubernetes') {
             steps {
                 script {
