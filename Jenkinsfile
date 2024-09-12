@@ -35,12 +35,12 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 script {
-                    withCredentials([file(credentialsId: 'kubeconfig_credentials', variable: 'KUBECONFIG')]) {
+                   
                         // Use kubectl to apply Kubernetes resources
                         bat 'kubectl apply -f namespace.yaml'
 						bat 'kubectl apply -f deployment.yaml'
 						bat 'kubectl apply -f service.yaml'
-                    }
+                    
                 }
             }
         }
