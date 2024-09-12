@@ -40,11 +40,20 @@ pipeline {
                         writeFile file: 'client.crt', text: new String(clientCrt)
                         writeFile file: 'client.key', text: new String(clientKey)
 
-                        // Print the contents of decoded files (optional)
-                        bat 'type ca.crt'
-                        bat 'type client.crt'
-                        bat 'type client.key'
+                         // Update the KUBECONFIG to point to these files instead of using base64-encoded inline data
+                      def updatedKubeconfig = kubeconfig.replaceFirst('certificate-authority-data: .*', 'certificate-authority: ca.crt').replaceFirst('client-certificate-data: .*', 'client-certificate: client.crt').replaceFirst('client-key-data: .*', 'client-key: client.key')
 
+                // Write the updated KUBECONFIG
+                writeFile file: 'updated_kubeconfig', text: updatedKubeconfig
+
+                // Print the contents of updated KUBECONFIG (optional)
+                bat 'type updated_kubeconfig'
+
+                // Use the updated KUBECONFIG for kubectl
+                bat 'kubectl config view --kubeconfig=updated_kubeconfig'
+
+                // Test kubectl commands with the new config
+                bat 'kubectl get pods --kubeconfig=updated_kubeconfig'
                         // Check the KUBECONFIG content
                         bat 'type %KUBECONFIG%'
                         bat 'kubectl config view'
