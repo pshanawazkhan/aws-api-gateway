@@ -1,3 +1,4 @@
+import java.util.Base64
 pipeline {
     agent any
 
