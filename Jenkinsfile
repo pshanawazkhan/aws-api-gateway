@@ -6,7 +6,7 @@ pipeline {
     environment {
         MAVEN_OPTS = '-Xms256m -Xmx512m'
         DOCKER_REGISTRY_CREDENTIALS = 'dockerhub_credentials'
-        K8S_REGESTRY_CREDENTIALS ='kubeconfig_credentials'
+        K8S_REGESTRY_CREDENTIALS = 'kubeconfig_credentials'
         DOCKER_IMAGE = 'phanawazkhan/apigateway'
         DOCKER_TAG = '6.6'
     }
@@ -22,10 +22,10 @@ pipeline {
             steps {
                 script {
                     withCredentials([file(credentialsId: K8S_REGESTRY_CREDENTIALS, variable: 'KUBECONFIG')]) {
-                        // Read kubeconfig content
+                        // Read the kubeconfig content
                         def kubeconfig = readFile(env.KUBECONFIG)
 
-                        // Extract and sanitize Base64-encoded data (removing spaces and newlines)
+                        // Extract and sanitize Base64-encoded data
                         def caCrtBase64 = kubeconfig.split('certificate-authority-data: ')[1].split('\n')[0].trim().replaceAll("\\s", "")
                         def clientCrtBase64 = kubeconfig.split('client-certificate-data: ')[1].split('\n')[0].trim().replaceAll("\\s", "")
                         def clientKeyBase64 = kubeconfig.split('client-key-data: ')[1].split('\n')[0].trim().replaceAll("\\s", "")
@@ -40,23 +40,20 @@ pipeline {
                         writeFile file: 'client.crt', text: new String(clientCrt)
                         writeFile file: 'client.key', text: new String(clientKey)
 
-                         // Update the KUBECONFIG to point to these files instead of using base64-encoded inline data
-                      def updatedKubeconfig = kubeconfig.replaceFirst('certificate-authority-data: .*', 'certificate-authority: ca.crt').replaceFirst('client-certificate-data: .*', 'client-certificate: client.crt').replaceFirst('client-key-data: .*', 'client-key: client.key')
+                        // Update the KUBECONFIG to reference these files
+                        def updatedKubeconfig = kubeconfig.replaceFirst('certificate-authority-data: .*', 'certificate-authority: ca.crt')
+                                                         .replaceFirst('client-certificate-data: .*', 'client-certificate: client.crt')
+                                                         .replaceFirst('client-key-data: .*', 'client-key: client.key')
 
-                // Write the updated KUBECONFIG
-                writeFile file: 'updated_kubeconfig', text: updatedKubeconfig
+                        // Write the updated KUBECONFIG
+                        writeFile file: 'updated_kubeconfig', text: updatedKubeconfig
 
-                // Print the contents of updated KUBECONFIG (optional)
-                bat 'type updated_kubeconfig'
+                        // Verify updated kubeconfig
+                        bat 'type updated_kubeconfig'
+                        bat 'kubectl config view --kubeconfig=updated_kubeconfig'
 
-                // Use the updated KUBECONFIG for kubectl
-                bat 'kubectl config view --kubeconfig=updated_kubeconfig'
-
-                // Test kubectl commands with the new config
-                bat 'kubectl get pods --kubeconfig=updated_kubeconfig'
-                        // Check the KUBECONFIG content
-                        bat 'type %KUBECONFIG%'
-                        bat 'kubectl config view'
+                        // Test with the new config
+                        bat 'kubectl get pods --kubeconfig=updated_kubeconfig'
                     }
                 }
             }
@@ -66,9 +63,9 @@ pipeline {
             steps {
                 script {
                     withCredentials([file(credentialsId: K8S_REGESTRY_CREDENTIALS, variable: 'KUBECONFIG')]) {
-                        bat 'kubectl apply -f namespace.yaml'
-                        bat 'kubectl apply -f deployment.yaml'
-                        bat 'kubectl apply -f service.yaml'
+                        bat 'kubectl apply -f namespace.yaml --kubeconfig=updated_kubeconfig'
+                        bat 'kubectl apply -f deployment.yaml --kubeconfig=updated_kubeconfig'
+                        bat 'kubectl apply -f service.yaml --kubeconfig=updated_kubeconfig'
                     }
                 }
             }
@@ -77,7 +74,7 @@ pipeline {
         stage("Verify Deployment") {
             steps {
                 script {
-                    bat 'kubectl get pods -n application'
+                    bat 'kubectl get pods -n application --kubeconfig=updated_kubeconfig'
                 }
             }
         }
